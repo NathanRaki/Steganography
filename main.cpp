@@ -127,6 +127,19 @@ int main()
 
 	int DC_pos = 0; // DC coefficient pos in zigzag scan
 	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
+
+	// TODO:
+	// Create a function to transform DCT int in binary
+	// Create a function to hide the message in Middle Frequencies :
+	//	Pour cacher le message, il faut le convertir en binaire
+	// 	Ensuite, on a un paramètre à définir : b (le nombre de bits modifiés par coefficient)
+	//	On va cacher le message en partant de la dernière fréquence moyenne et en remontant à l'envers
+	//	Si on prend le scan zigzag, la dernière fréquence moyenne est à la position 48 (58 dans le sens de lecture normal)
+	//	Après on va check les LSB des coef, si b=1 on prend le dernier bit, si b=2 les deux derniers bits etc.
+	//	Si b=2 et que les deux bits sont pareils que les deux premiers de notre message, on laisse comme ça et on passe à la suite
+	//	Si b=2 et que les bits sont différents c'est un peu plus compliqué
+	//	Imaginons le DCT c'est 8 (donc 1000 en binaire) et que nous les deux bits qu'on veut mettre c'est 01. Si on changeait les deux derniers on aurait 1001 = 9
+	//	Et changer comme ça on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va échanger les deux coef, sinon on échange avec le coeff dont la fin binaire ressemble le + à 01
 	
 	return 0;
 }
