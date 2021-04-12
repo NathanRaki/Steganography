@@ -1,12 +1,21 @@
-#include <opencv2/opencv.hpp>
+#include <opencv2\opencv.hpp>  
+#include <opencv2\core\core.hpp>
+#include <opencv2\core\mat.hpp>
 #include <iostream>
 #include <numbers>
 #include <vector>
+#include <string>
+#include <bitset>
+#include <cstdlib>
 
 # define M_PI 3.14159265358979323846
-typedef std::vector<std::vector<int>> block;
-typedef std::vector<std::vector<block>> grid;
-typedef std::pair<int, int> pos;
+typedef std::vector<std::vector<int>> block; //vector of vector int
+typedef std::vector<std::vector<block>> grid; //vector of vector of block
+typedef std::pair<int, int> pos; //pair int / int
+
+using namespace std;
+using namespace cv;
+
 
 // Quantize a DCT block with luminance quantization table
 // in : DCT 8x8 matrix
@@ -16,11 +25,11 @@ void quantize(block& in, block& out)
 	// Importing the luminance quantization table
 	float q_table[8][8] = { {16, 11, 10, 16,  24,  40,  51,  61},
 							{12, 12, 14, 19,  26,  58,  60,  55},
-							{14, 13, 16, 24,  40,  57,  69,  56}, 
-							{14, 17, 22, 29,  51,  87,  80,  62}, 
+							{14, 13, 16, 24,  40,  57,  69,  56},
+							{14, 17, 22, 29,  51,  87,  80,  62},
 							{18, 22, 37, 56,  68, 109, 103,  77},
-							{24, 35, 55, 64,  81, 104, 113,  92}, 
-							{49, 64, 78, 87, 103, 121, 120, 101}, 
+							{24, 35, 55, 64,  81, 104, 113,  92},
+							{49, 64, 78, 87, 103, 121, 120, 101},
 							{72, 92, 95, 98, 112, 100, 103,  99} };
 	// Go through the block and quantize every value
 	for (int x = 0; x < 8; x++)
@@ -44,10 +53,10 @@ void convertToDCT(cv::Mat& img, grid& dct)
 	block b(8, std::vector<int>(8)); // 8x8 vector, filled with zeros
 
 	// Iterating through blocks (step=8)
-	for (int i = 0; i < img.rows; i+=8)
+	for (int i = 0; i < img.rows; i += 8)
 	{
 		std::vector<block> grid_row; // Row of blocks, to fill the grid
-		for (int j = 0; j < img.cols; j+=8)
+		for (int j = 0; j < img.cols; j += 8)
 		{
 			// Iterating through each block value
 			for (int u = 0; u < 8; u++)
@@ -55,16 +64,18 @@ void convertToDCT(cv::Mat& img, grid& dct)
 				for (int v = 0; v < 8; v++)
 				{
 					float Cu, Cv, sum = 0;
-					if (u == 0) { Cu = 1 / sqrt(2); } else { Cu = 1; } // cf. DCT formula
-					if (v == 0) { Cv = 1 / sqrt(2); } else { Cv = 1; } // cf. DCT formula
-					// Iterating through each pixel
+					if (u == 0) { Cu = 1 / sqrt(2); }
+					else { Cu = 1; } // cf. DCT formula
+					if (v == 0) { Cv = 1 / sqrt(2); }
+					else { Cv = 1; } // cf. DCT formula
+// Iterating through each pixel
 					for (int x = 0; x < 8; x++)
 					{
 						for (int y = 0; y < 8; y++)
 						{
-							sum += img_f.at<float>(i+x, j+y)
-									* cos(((2.0 * x + 1) * u * M_PI) / 16.0)
-									* cos(((2.0 * y + 1) * v * M_PI) / 16.0);
+							sum += img_f.at<float>(i + x, j + y)
+								* cos(((2.0 * x + 1) * u * M_PI) / 16.0)
+								* cos(((2.0 * y + 1) * v * M_PI) / 16.0);
 						}
 					}
 					// Once we've seen every pixel, we can update the dct coefficient value and go to the next one
@@ -96,20 +107,141 @@ std::vector<pos> zigzagscan(int n, int m)
 	std::sort(p.begin(), p.end(), buble);
 
 	for (int i = 0; i < n * m; i++)
-		res.push_back(std::make_pair(int(p[i][2]/m), p[i][2]%n));
+		res.push_back(std::make_pair(int(p[i][2] / m), p[i][2] % n));
 	return res;
 }
 
-int main()
+
+
+string char_to_bin(char ch)
 {
-	// Convert image to DCT grid
-	cv::Mat img = cv::imread("panther.jpg", cv::IMREAD_GRAYSCALE);
+	bitset<8> temp(ch);
+	return temp.to_string();
+}
+bitset<32> int_to_bin(int i) {
+	return std::bitset<32>(i); //to binary
+}
+
+std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order){
+	std::vector<bitset<32>> bin;
+	for (auto x : order)
+	{
+		bin.push_back(int_to_bin(bis[x.first][x.second]));
+	}
+	return bin;
+}
+
+Mat dctcoeffreplacement(Mat img, string msg) {
+	//Convert image to DCT grid
+	resize(img, img, Size(800, 800)); //resize image to 800*800
 	grid g;
 	convertToDCT(img, g);
 
+	// Display block content in zigzag scan order
+	std::vector<pos> order = zigzagscan(8, 8);
+	
+	
 	// Display block content
-	block b = g[30][99]; // 31st row, 100th column
-	for (auto x : b)
+	
+	block test = g[0][0]; // 1st row, 1st column
+	for (auto x : test)
+	{
+		for (auto y : x)
+		{
+			printf("%5i ", y);
+		}
+		std::cout << std::endl;
+	}
+	
+
+	int DC_pos = 0; // DC coefficient pos in zigzag scan
+	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
+
+	//message string converted in binary
+	string msgBin = "";
+	for (char& c : msg) {
+		msgBin += char_to_bin(c);
+	}
+
+	cout << msgBin << endl;
+	int msgsize = msgBin.size();
+
+	//parameter b : number of bits modified in each DC coefficient
+	int b = 1;
+
+	int posmsg = 0; //pos of the bit in the message to encode
+	for (auto a : g) {
+		for (auto bl : a) {
+			for (auto x : order)
+			{
+				//only after the last middle frequency pos at (7,2)		//j'arrive pas √† faire en remontant, donc c'est en descendant l√† :'(
+				if (x.first < 3 || x.second < 3) { continue; }
+				if (x.first == 7 && x.second < 3) { continue; }
+				if (x.first == 6 && x.second < 4) { continue; }
+				if (x.first == 5 && x.second < 5) { continue; }
+				if (x.first == 4 && x.second < 6) { continue; }
+				if (x.first == 3 && x.second < 7) { continue; }
+
+				//Least Significant Bit
+				int LSB = abs(bl[x.first][x.second] % 2);
+				std::cout << int_to_bin(bl[x.first][x.second]) << ", LSB : " << LSB << ", MB : " << msgBin[posmsg] << endl;
+
+				//if the MB and LSB are different
+				if ((LSB == 0 && msgBin[posmsg] == '1') || (LSB == 1 && msgBin[posmsg] == '0') ){
+					int temp=0;
+					if (LSB == 0 && msgBin[posmsg] == '1') {
+						temp = bl[x.first][x.second] - 1;
+						cout << " temp : " << temp << endl;
+					}
+					else if (LSB == 1 && msgBin[posmsg] == '0') {
+						temp = bl[x.first][x.second] + 1;
+					}
+
+					//replacement method
+					bl[x.first][x.second] = temp;
+					/*
+					bool foundSubstitute = false;
+					for (auto y : order) // cherche dans tout le block = pas bon ! -> pas dans ceux dont on a chang√© les bits
+					{
+						//if it has the same coefficient in the 8*8 block
+						if (bl[y.first][y.second] == temp) {
+							foundSubstitute = true;
+							bl[y.first][y.second] = bl[x.first][x.second];
+							bl[x.first][x.second] = temp;
+							break;
+						}
+					}
+					if (!foundSubstitute) {
+						//trouver une valeur qui s'en rapproche le plus (avec le LSB = msgBin[posmsg])
+					}
+					*/
+				}
+				posmsg++;
+				if (posmsg == msgsize) {
+					break;
+				}
+			}
+			for (auto x : bl)
+			{
+				for (auto y : x)
+				{
+					printf("%5i ", y);
+				}
+				std::cout << std::endl;
+			}
+			std::cout << std::endl;
+			if (posmsg == msgsize) {
+					break;
+			}
+		}
+		if (posmsg == msgsize) {
+			break;
+		}
+	}
+
+	//probl√®me de pointeur ou jsp mais l√† √ßa affiche pas ce que √ßa devrait ;-;
+	test = g[0][0]; // 1st row, 1st column
+	for (auto x : test)
 	{
 		for (auto y : x)
 		{
@@ -118,28 +250,32 @@ int main()
 		std::cout << std::endl;
 	}
 
-	// Display block content in zigzag scan order
-	std::vector<pos> order = zigzagscan(8, 8);
-	for (auto x : order)
-	{
-		printf("%5i ", b[x.first][x.second]);
-	}
-
-	int DC_pos = 0; // DC coefficient pos in zigzag scan
-	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
-
 	// TODO:
-	// Create a function to transform DCT int in binary
+	// (DONE, mais finalement inutile :sadness:) Create a function to transform DCT int in binary 
 	// Create a function to hide the message in Middle Frequencies :
 	//	Pour cacher le message, il faut le convertir en binaire
-	// 	Ensuite, on a un paramËtre ‡ dÈfinir : b (le nombre de bits modifiÈs par coefficient)
-	//	On va cacher le message en partant de la derniËre frÈquence moyenne et en remontant ‡ l'envers
-	//	Si on prend le scan zigzag, la derniËre frÈquence moyenne est ‡ la position 48 (58 dans le sens de lecture normal)
-	//	AprËs on va check les LSB des coef, si b=1 on prend le dernier bit, si b=2 les deux derniers bits etc.
-	//	Si b=2 et que les deux bits sont pareils que les deux premiers de notre message, on laisse comme Áa et on passe ‡ la suite
-	//	Si b=2 et que les bits sont diffÈrents c'est un peu plus compliquÈ
+	// 	Ensuite, on a un param√®tre √† d√©finir : b (le nombre de bits modifi√©s par coefficient) //param√®tre √† 1 si ce qui est √† cacher est un message √©crit
+	//	- On va cacher le message en partant de la derni√®re fr√©quence moyenne et en remontant √† l'envers
+	//	- Si on prend le scan zigzag, la derni√®re fr√©quence moyenne est √† la position 48 (58 dans le sens de lecture normal)
+	//	Apr√®s on va check les LSB des coef, si b=1 on prend le dernier bit, si b=2 les deux derniers bits etc.
+	//	Si b=2 et que les deux bits sont pareils que les deux premiers de notre message, on laisse comme √ßa et on passe √† la suite
+	//	Si b=2 et que les bits sont diff√©rents c'est un peu plus compliqu√©
 	//	Imaginons le DCT c'est 8 (donc 1000 en binaire) et que nous les deux bits qu'on veut mettre c'est 01. Si on changeait les deux derniers on aurait 1001 = 9
-	//	Et changer comme Áa on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va Èchanger les deux coef, sinon on Èchange avec le coeff dont la fin binaire ressemble le + ‡ 01
+	//	Et changer comme √ßa on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va √©changer les deux coef, sinon on √©change avec le coeff dont la fin binaire ressemble le + √† 01
+
+	Mat temp;
+	return temp;
+}
+
+int main()
+{
+	string msg = "abc"; //Message to hide
+	cv::Mat img = cv::imread("panther.jpg", cv::IMREAD_GRAYSCALE);
+	//imshow("img", img); //show before stegano
+
+	Mat stegano = dctcoeffreplacement(img, msg);
+	//imshow //show after stegano
+	//waitKey();
 	
 	return 0;
 }
