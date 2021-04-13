@@ -169,18 +169,21 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	//parameter b : number of bits modified in each DC coefficient
 	int b = 1;
 
+	std::vector<pos> order_reverse(order.size());
+	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
+
 	int posmsg = 0; //pos of the bit in the message to encode
 	for (auto a : g) {
 		for (auto bl : a) {
-			for (auto x : order)
+			for (auto x : order_reverse)
 			{
-				//only after the last middle frequency pos at (7,2)		//j'arrive pas à faire en remontant, donc c'est en descendant là :'(
-				if (x.first < 3 || x.second < 3) { continue; }
-				if (x.first == 7 && x.second < 3) { continue; }
-				if (x.first == 6 && x.second < 4) { continue; }
-				if (x.first == 5 && x.second < 5) { continue; }
-				if (x.first == 4 && x.second < 6) { continue; }
-				if (x.first == 3 && x.second < 7) { continue; }
+				//only before the last middle frequency pos at (7,2)
+				if (x.first == 0 && x.second == 0) { continue; }
+				if (x.first == 7 && x.second >= 3) { continue; }
+				if (x.first == 6 && x.second >= 4) { continue; }
+				if (x.first == 5 && x.second >= 5) { continue; }
+				if (x.first == 4 && x.second >= 6) { continue; }
+				if (x.first == 3 && x.second >= 7) { continue; }
 
 				//Least Significant Bit
 				int LSB = abs(bl[x.first][x.second] % 2);
@@ -195,6 +198,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 					}
 					else if (LSB == 1 && msgBin[posmsg] == '0') {
 						temp = bl[x.first][x.second] + 1;
+						cout << " temp : " << temp << endl;
 					}
 
 					//replacement method
@@ -270,12 +274,12 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 int main()
 {
 	string msg = "abc"; //Message to hide
-	cv::Mat img = cv::imread("panther.jpg", cv::IMREAD_GRAYSCALE);
-	//imshow("img", img); //show before stegano
+	cv::Mat img = cv::imread("images/lena.jpg", cv::IMREAD_GRAYSCALE);
+	imshow("img", img);
 
 	Mat stegano = dctcoeffreplacement(img, msg);
-	//imshow //show after stegano
-	//waitKey();
+	//imshow
+	waitKey();
 	
 	return 0;
 }
