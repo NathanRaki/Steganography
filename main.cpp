@@ -139,10 +139,10 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 
 	// Display block content in zigzag scan order
 	std::vector<pos> order = zigzagscan(8, 8);
-	
+	std::vector<pos> order_reverse(order.size()); //reverse zigzag scan order
+	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
 	
 	// Display block content
-	
 	block test = g[0][0]; // 1st row, 1st column
 	for (auto x : test)
 	{
@@ -153,7 +153,6 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 		std::cout << std::endl;
 	}
 	
-
 	int DC_pos = 0; // DC coefficient pos in zigzag scan
 	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
 
@@ -162,19 +161,15 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	for (char& c : msg) {
 		msgBin += char_to_bin(c);
 	}
+	int msgsize = msgBin.size(); //size of the binary message
+	int posmsg = 0; //current pos of the bit in the message to encode
 
-	cout << msgBin << endl;
-	int msgsize = msgBin.size();
+	//parameters
+	int b = 1; //number of bits modified in each DC coefficient
 
-	//parameter b : number of bits modified in each DC coefficient
-	int b = 1;
 
-	std::vector<pos> order_reverse(order.size());
-	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
-
-	int posmsg = 0; //pos of the bit in the message to encode
-	for (auto a : g) {
-		for (auto bl : a) {
+	for (auto &a :g) {
+		for (auto &bl : a) {
 			for (auto x : order_reverse)
 			{
 				//only before the last middle frequency pos at (7,2)
@@ -185,11 +180,10 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 				if (x.first == 4 && x.second >= 6) { continue; }
 				if (x.first == 3 && x.second >= 7) { continue; }
 
-				//Least Significant Bit
-				int LSB = abs(bl[x.first][x.second] % 2);
+				int LSB = abs(bl[x.first][x.second] % 2); //get the Least Significant Bit of the coefficient
 				std::cout << int_to_bin(bl[x.first][x.second]) << ", LSB : " << LSB << ", MB : " << msgBin[posmsg] << endl;
 
-				//if the MB and LSB are different
+				//if the MB (Message Bit to encode) and the LSB are different
 				if ((LSB == 0 && msgBin[posmsg] == '1') || (LSB == 1 && msgBin[posmsg] == '0') ){
 					int temp=0;
 					if (LSB == 0 && msgBin[posmsg] == '1') {
@@ -225,15 +219,6 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 					break;
 				}
 			}
-			for (auto x : bl)
-			{
-				for (auto y : x)
-				{
-					printf("%5i ", y);
-				}
-				std::cout << std::endl;
-			}
-			std::cout << std::endl;
 			if (posmsg == msgsize) {
 					break;
 			}
@@ -243,7 +228,6 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 		}
 	}
 
-	//problème de pointeur ou jsp mais là ça affiche pas ce que ça devrait ;-;
 	test = g[0][0]; // 1st row, 1st column
 	for (auto x : test)
 	{
