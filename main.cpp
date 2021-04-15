@@ -7,6 +7,7 @@
 #include <string>
 #include <bitset>
 #include <cstdlib>
+#include <typeinfo>
 
 # define M_PI 3.14159265358979323846
 typedef std::vector<std::vector<int>> block; //vector of vector int
@@ -63,6 +64,7 @@ void convertToDCT(cv::Mat& img, grid& dct)
 			{
 				for (int v = 0; v < 8; v++)
 				{
+					if (i == 0 && j == 0) { cout << img_f.at<float>(i + u, j + v) << " "; }
 					float Cu, Cv, sum = 0;
 					if (u == 0) { Cu = 1 / sqrt(2); }
 					else { Cu = 1; } // cf. DCT formula
@@ -81,10 +83,21 @@ void convertToDCT(cv::Mat& img, grid& dct)
 					// Once we've seen every pixel, we can update the dct coefficient value and go to the next one
 					b[u][v] = round(0.25 * Cu * Cv * sum);
 				}
+				if (i == 0 && j == 0) { cout << endl; }
 			}
 			grid_row.push_back(b); // Adding the block to the row
 		}
 		dct.push_back(grid_row); // Adding the row to the grid
+	}
+	block b2 = dct[0][0];
+	cout << endl;
+	for (auto row : b2)
+	{
+		for (auto val : row)
+		{
+			cout << val << " ";
+		}
+		cout << endl;
 	}
 }
 
@@ -172,8 +185,47 @@ Mat dctToIdct(Mat src){
 	return iDCT;
 }
 
+string decode(Mat img, int n)
+{
+	grid g;
+	convertToDCT(img, g);
+
+	// Display block content in zigzag scan order
+	std::vector<pos> order = zigzagscan(8, 8);
+	std::vector<pos> order_reverse(order.size()); //reverse zigzag scan order
+	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
+
+	string messageBits = "";
+	int bitCount = 0;
+	for (auto& a : g) {
+		for (auto& bl : a) {
+			for (int i = 15; i < order.size() - 1; ++i)
+			{
+				pos x = order_reverse[i];
+				messageBits += bl[x.first][x.second];
+				bitCount++;
+				if (bitCount == n) { break; }
+			}
+			if (bitCount == n) { break; }
+		}
+		if (bitCount == n) { break; }
+	}
+
+	string message = "";
+	for (int i = 0; i < messageBits.length(); i += 8)
+	{
+		for (int j = i; j < i+8; j++)
+		{
+			cout << j << " HEY" << endl;
+			char c = static_cast<char>(std::bitset<8>(messageBits[j]).to_ulong() + 64);
+			message += c;
+		}
+	}
+	return message;
+}
+
 Mat dctcoeffreplacement(Mat img, string msg) {
-	int sizeI = 512;
+  int sizeI = 512;
 
 	//Convert image to DCT grid
 	resize(img, img, Size(sizeI, sizeI)); //resize image
@@ -184,17 +236,6 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	std::vector<pos> order = zigzagscan(8, 8);
 	std::vector<pos> order_reverse(order.size()); //reverse zigzag scan order
 	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
-
-	// Display block content
-	block test = g[0][0]; // 1st row, 1st column
-	for (auto x : test)
-	{
-		for (auto y : x)
-		{
-			printf("%5i ", y);
-		}
-		std::cout << std::endl;
-	}
 
 	int DC_pos = 0; // DC coefficient pos in zigzag scan
 	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
@@ -211,51 +252,65 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	int b = 1; //number of bits modified in each DC coefficient
 
 
-	for (auto& a : g) {
-		for (auto& bl : a) {
-			for (auto x : order_reverse)
+	for (auto &a :g) {
+		for (auto &bl : a) {
+			for (int i = 15; i < order.size() - 1; ++i)
 			{
+				pos x = order_reverse[i];
 				//only before the last middle frequency pos at (7,2)
-				if (x.first == 0 && x.second == 0) { continue; }
-				if (x.first == 7 && x.second >= 3) { continue; }
-				if (x.first == 6 && x.second >= 4) { continue; }
-				if (x.first == 5 && x.second >= 5) { continue; }
-				if (x.first == 4 && x.second >= 6) { continue; }
-				if (x.first == 3 && x.second >= 7) { continue; }
 
-				int LSB = abs(bl[x.first][x.second] % 2); //get the Least Significant Bit of the coefficient
-				std::cout << int_to_bin(bl[x.first][x.second]) << ", LSB : " << LSB << ", MB : " << msgBin[posmsg] << endl;
+				int xLSB = abs(bl[x.first][x.second] % 2); //get the Least Significant Bit of the coefficient
+				cout << msgBin << endl;
+				string msgBit(1, msgBin[posmsg]);
+				int xval = bl[x.first][x.second];
+				std::cout << int_to_bin(xval) << ", LSB : " << xLSB << ", MB : " << msgBit << endl;
 
 				//if the MB (Message Bit to encode) and the LSB are different
-				if ((LSB == 0 && msgBin[posmsg] == '1') || (LSB == 1 && msgBin[posmsg] == '0')) {
-					int temp = 0;
-					if (LSB == 1 && msgBin[posmsg] == '0') {
-						temp = bl[x.first][x.second] - 1;
+				if ((xLSB == 0 && msgBit == "1") || (xLSB == 1 && msgBit == "0") ){
+					int temp=0;
+					if (xLSB == 0 && msgBit == "1") {
+						temp = xval + 1;
 						cout << " temp : " << temp << endl;
 					}
-					else if (LSB == 0 && msgBin[posmsg] == '1') {
-						temp = bl[x.first][x.second] + 1;
+					else if (xLSB == 1 && msgBit == "0") {
+						temp = xval - 1;
 						cout << " temp : " << temp << endl;
 					}
 
-					//replacement method
-					bl[x.first][x.second] = temp;
-					/*
-					bool foundSubstitute = false;
-					for (auto y : order) // cherche dans tout le block = pas bon ! -> pas dans ceux dont on a changé les bits
+					bool changed = false;
+					int yval, yLSB;
+					pos closest(-1, 0);
+					for (int j = i+1; j < order.size() - 1; j++)
 					{
-						//if it has the same coefficient in the 8*8 block
-						if (bl[y.first][y.second] == temp) {
-							foundSubstitute = true;
-							bl[y.first][y.second] = bl[x.first][x.second];
-							bl[x.first][x.second] = temp;
-							break;
+						pos y = order_reverse[j];
+						int yval = bl[y.first][y.second];
+						if (temp == yval)
+						{
+							bl[y.first][y.second] = xval;
+							bl[x.first][x.second] = yval;
+							changed = true;
+						}
+						if (changed) { break; }
+						yLSB = abs(bl[y.first][y.second] % 2);
+						if (yLSB == stoi(msgBit))
+						{
+							if (closest.first == -1) { closest.first = y.first; closest.second = y.second; }
+							else if (abs(temp - yval) < abs(temp - bl[closest.first][closest.second])) { closest.first = y.first; closest.second = y.second; }
 						}
 					}
-					if (!foundSubstitute) {
-						//trouver une valeur qui s'en rapproche le plus (avec le LSB = msgBin[posmsg])
+
+					if (!changed) {
+						if (closest.first == -1) { bl[x.first][x.second] = temp; }
+						else
+						{
+							int cval = bl[closest.first][closest.second];
+							cout << cval << endl;
+							bl[closest.first][closest.second] = xval;
+							cout << bl[closest.first][closest.second] << endl;
+							bl[x.first][x.second] = cval;
+							cout << bl[x.first][x.second] << endl;
+						}
 					}
-					*/
 				}
 				posmsg++;
 				if (posmsg == msgsize) {
@@ -292,8 +347,8 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 
 int main()
 {
-	string msg = "abc"; //Message to hide
-	cv::Mat img = cv::imread("images/lena.jpg", cv::IMREAD_GRAYSCALE);
+	string msg = "On est des tubes on est pas des pots, mais on a tout ce qu'il vous faut"; //Message to hide
+	cv::Mat img = cv::imread("panther.jpg", cv::IMREAD_GRAYSCALE);
 	imshow("img", img);
 
 	Mat stegano = dctcoeffreplacement(img, msg);
