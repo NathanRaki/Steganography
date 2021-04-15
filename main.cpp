@@ -135,13 +135,54 @@ bitset<32> int_to_bin(int i) {
 	return std::bitset<32>(i); //to binary
 }
 
-std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order){
+std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order) {
 	std::vector<bitset<32>> bin;
 	for (auto x : order)
 	{
 		bin.push_back(int_to_bin(bis[x.first][x.second]));
 	}
 	return bin;
+}
+
+Mat gridToMat(grid g, int sizeI, std::vector<pos> order) {
+	Mat matIDCT = Mat::zeros(sizeI, sizeI, CV_64FC1);
+	int k, l = 0;
+	for (auto& a : g) {
+		k = 0;
+		for (auto& bl : a) {
+			for (auto x : order)
+			{
+				matIDCT.at<double>(x.first + l, x.second + k) = double(bl[x.first][x.second]) / 255;
+			}
+			k = k + 8;
+		}
+		l = l + 8;
+	}
+	return matIDCT;
+}
+
+Mat dctToIdct(Mat src){
+
+	src.convertTo(src, CV_64F);
+	//imshow("img2test", matIDCT);
+
+	Mat iDCTtemp, iDCT;
+	idct(src, iDCT);
+
+	int divideSize = 8;
+	Mat p1;
+
+	for (int i = 0; i < src.rows; i += divideSize)
+	{
+		for (int j = 0; j < src.cols; j += divideSize)
+		{
+			p1 = src(cv::Rect(i, j, divideSize, divideSize));
+			idct(p1, iDCTtemp);
+			iDCTtemp.copyTo(iDCT(cv::Rect(i, j, divideSize, divideSize)));
+		}
+	}
+
+	return iDCT;
 }
 
 string decode(Mat img, int n)
@@ -184,8 +225,10 @@ string decode(Mat img, int n)
 }
 
 Mat dctcoeffreplacement(Mat img, string msg) {
+  int sizeI = 512;
+
 	//Convert image to DCT grid
-	resize(img, img, Size(800, 800)); //resize image to 800*800
+	resize(img, img, Size(sizeI, sizeI)); //resize image
 	grid g;
 	convertToDCT(img, g);
 
@@ -193,7 +236,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	std::vector<pos> order = zigzagscan(8, 8);
 	std::vector<pos> order_reverse(order.size()); //reverse zigzag scan order
 	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
-	
+
 	int DC_pos = 0; // DC coefficient pos in zigzag scan
 	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
 
@@ -275,7 +318,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 				}
 			}
 			if (posmsg == msgsize) {
-					break;
+				break;
 			}
 		}
 		if (posmsg == msgsize) {
@@ -283,8 +326,23 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 		}
 	}
 
-	Mat temp;
-	return temp;
+	Mat matDCT = gridToMat(g, sizeI, order);
+	Mat matIDCT = dctToIdct(matDCT);
+
+	// TODO:
+	// (DONE, mais finalement inutile :sadness:) Create a function to transform DCT int in binary 
+	// Create a function to hide the message in Middle Frequencies :
+	//	Pour cacher le message, il faut le convertir en binaire
+	// 	Ensuite, on a un paramètre à définir : b (le nombre de bits modifiés par coefficient) //paramètre à 1 si ce qui est à cacher est un message écrit
+	//	- On va cacher le message en partant de la dernière fréquence moyenne et en remontant à l'envers
+	//	- Si on prend le scan zigzag, la dernière fréquence moyenne est à la position 48 (58 dans le sens de lecture normal)
+	//	Après on va check les LSB des coef, si b=1 on prend le dernier bit, si b=2 les deux derniers bits etc.
+	//	Si b=2 et que les deux bits sont pareils que les deux premiers de notre message, on laisse comme ça et on passe à la suite
+	//	Si b=2 et que les bits sont différents c'est un peu plus compliqué
+	//	Imaginons le DCT c'est 8 (donc 1000 en binaire) et que nous les deux bits qu'on veut mettre c'est 01. Si on changeait les deux derniers on aurait 1001 = 9
+	//	Et changer comme ça on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va échanger les deux coef, sinon on échange avec le coeff dont la fin binaire ressemble le + à 01
+
+	return matIDCT;
 }
 
 int main()
@@ -294,11 +352,8 @@ int main()
 	imshow("img", img);
 
 	Mat stegano = dctcoeffreplacement(img, msg);
-
-	//string hidden = decode(stegano, 72 * 3);
-	//cout << hidden << endl;
-	//imshow
+	imshow("stegano", stegano);
 	waitKey();
-	
+
 	return 0;
 }
