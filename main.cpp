@@ -122,7 +122,7 @@ bitset<32> int_to_bin(int i) {
 	return std::bitset<32>(i); //to binary
 }
 
-std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order){
+std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order) {
 	std::vector<bitset<32>> bin;
 	for (auto x : order)
 	{
@@ -131,9 +131,52 @@ std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order){
 	return bin;
 }
 
+Mat gridToMat(grid g, int sizeI, std::vector<pos> order) {
+	Mat matIDCT = Mat::zeros(sizeI, sizeI, CV_64FC1);
+	int k, l = 0;
+	for (auto& a : g) {
+		k = 0;
+		for (auto& bl : a) {
+			for (auto x : order)
+			{
+				matIDCT.at<double>(x.first + l, x.second + k) = double(bl[x.first][x.second]) / 255;
+			}
+			k = k + 8;
+		}
+		l = l + 8;
+	}
+	return matIDCT;
+}
+
+Mat dctToIdct(Mat src){
+
+	src.convertTo(src, CV_64F);
+	//imshow("img2test", matIDCT);
+
+	Mat iDCTtemp, iDCT;
+	idct(src, iDCT);
+
+	int divideSize = 8;
+	Mat p1;
+
+	for (int i = 0; i < src.rows; i += divideSize)
+	{
+		for (int j = 0; j < src.cols; j += divideSize)
+		{
+			p1 = src(cv::Rect(i, j, divideSize, divideSize));
+			idct(p1, iDCTtemp);
+			iDCTtemp.copyTo(iDCT(cv::Rect(i, j, divideSize, divideSize)));
+		}
+	}
+
+	return iDCT;
+}
+
 Mat dctcoeffreplacement(Mat img, string msg) {
+	int sizeI = 512;
+
 	//Convert image to DCT grid
-	resize(img, img, Size(800, 800)); //resize image to 800*800
+	resize(img, img, Size(sizeI, sizeI)); //resize image
 	grid g;
 	convertToDCT(img, g);
 
@@ -141,7 +184,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	std::vector<pos> order = zigzagscan(8, 8);
 	std::vector<pos> order_reverse(order.size()); //reverse zigzag scan order
 	std::reverse_copy(std::begin(order), std::end(order), std::begin(order_reverse));
-	
+
 	// Display block content
 	block test = g[0][0]; // 1st row, 1st column
 	for (auto x : test)
@@ -152,7 +195,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 		}
 		std::cout << std::endl;
 	}
-	
+
 	int DC_pos = 0; // DC coefficient pos in zigzag scan
 	int lastMF_pos = 48; // Last Middle Frequency pos in zigzag scan
 
@@ -168,8 +211,8 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	int b = 1; //number of bits modified in each DC coefficient
 
 
-	for (auto &a :g) {
-		for (auto &bl : a) {
+	for (auto& a : g) {
+		for (auto& bl : a) {
 			for (auto x : order_reverse)
 			{
 				//only before the last middle frequency pos at (7,2)
@@ -184,13 +227,13 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 				std::cout << int_to_bin(bl[x.first][x.second]) << ", LSB : " << LSB << ", MB : " << msgBin[posmsg] << endl;
 
 				//if the MB (Message Bit to encode) and the LSB are different
-				if ((LSB == 0 && msgBin[posmsg] == '1') || (LSB == 1 && msgBin[posmsg] == '0') ){
-					int temp=0;
-					if (LSB == 0 && msgBin[posmsg] == '1') {
+				if ((LSB == 0 && msgBin[posmsg] == '1') || (LSB == 1 && msgBin[posmsg] == '0')) {
+					int temp = 0;
+					if (LSB == 1 && msgBin[posmsg] == '0') {
 						temp = bl[x.first][x.second] - 1;
 						cout << " temp : " << temp << endl;
 					}
-					else if (LSB == 1 && msgBin[posmsg] == '0') {
+					else if (LSB == 0 && msgBin[posmsg] == '1') {
 						temp = bl[x.first][x.second] + 1;
 						cout << " temp : " << temp << endl;
 					}
@@ -220,7 +263,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 				}
 			}
 			if (posmsg == msgsize) {
-					break;
+				break;
 			}
 		}
 		if (posmsg == msgsize) {
@@ -228,15 +271,8 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 		}
 	}
 
-	test = g[0][0]; // 1st row, 1st column
-	for (auto x : test)
-	{
-		for (auto y : x)
-		{
-			printf("%5i ", y);
-		}
-		std::cout << std::endl;
-	}
+	Mat matDCT = gridToMat(g, sizeI, order);
+	Mat matIDCT = dctToIdct(matDCT);
 
 	// TODO:
 	// (DONE, mais finalement inutile :sadness:) Create a function to transform DCT int in binary 
@@ -251,8 +287,7 @@ Mat dctcoeffreplacement(Mat img, string msg) {
 	//	Imaginons le DCT c'est 8 (donc 1000 en binaire) et que nous les deux bits qu'on veut mettre c'est 01. Si on changeait les deux derniers on aurait 1001 = 9
 	//	Et changer comme ça on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va échanger les deux coef, sinon on échange avec le coeff dont la fin binaire ressemble le + à 01
 
-	Mat temp;
-	return temp;
+	return matIDCT;
 }
 
 int main()
@@ -262,8 +297,8 @@ int main()
 	imshow("img", img);
 
 	Mat stegano = dctcoeffreplacement(img, msg);
-	//imshow
+	imshow("stegano", stegano);
 	waitKey();
-	
+
 	return 0;
 }
