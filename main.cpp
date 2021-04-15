@@ -80,7 +80,7 @@ void pixel2DCT(cv::Mat& img, grid& dct)
 						}
 					}
 					// Once we've seen every pixel, we can update the dct coefficient value and go to the next one
-					b[u][v] = round((1/sqrt(2)) * Cu * Cv * sum);
+					b[u][v] = round((1 / sqrt(2)) * Cu * Cv * sum);
 				}
 			}
 			grid_row.push_back(b); // Adding the block to the row
@@ -113,7 +113,6 @@ std::vector<pos> zigzagscan(int n, int m)
 }
 
 
-
 string char_to_bin(char ch)
 {
 	bitset<8> temp(ch);
@@ -123,24 +122,18 @@ bitset<32> int_to_bin(int i) {
 	return std::bitset<32>(i); //to binary
 }
 
-std::vector<bitset<32>> blockDCTbin(block bis, std::vector<pos> order) {
-	std::vector<bitset<32>> bin;
-	for (auto x : order)
-	{
-		bin.push_back(int_to_bin(bis[x.first][x.second]));
-	}
-	return bin;
-}
 
+//tranform a grid to a matrice
 Mat gridToMat(grid g, int sizeI, std::vector<pos> order) {
 	Mat matIDCT = Mat::zeros(sizeI, sizeI, CV_64FC1);
 	int k, l = 0;
+	//for each DCT value, put it into a matrice
 	for (auto& a : g) {
 		k = 0;
 		for (auto& bl : a) {
 			for (auto x : order)
 			{
-				matIDCT.at<double>(x.first + l, x.second + k) = double(bl[x.first][x.second]);
+				matIDCT.at<double>(x.first + l, x.second + k) = double(bl[x.first][x.second])/255;
 			}
 			k = k + 8;
 		}
@@ -149,8 +142,8 @@ Mat gridToMat(grid g, int sizeI, std::vector<pos> order) {
 	return matIDCT;
 }
 
+//invert the DCT coefficient using idct() method
 Mat dctToIdct(Mat src) {
-
 	src.convertTo(src, CV_64F);
 	//imshow("img2test", matIDCT);
 
@@ -164,6 +157,7 @@ Mat dctToIdct(Mat src) {
 	{
 		for (int j = 0; j < src.cols; j += divideSize)
 		{
+			//invert using 8*8 blocks
 			p1 = src(cv::Rect(i, j, divideSize, divideSize));
 			idct(p1, iDCTtemp);
 			iDCTtemp.copyTo(iDCT(cv::Rect(i, j, divideSize, divideSize)));
@@ -177,6 +171,16 @@ string decode(Mat img, int n)
 {
 	grid g;
 	pixel2DCT(img, g);
+	cout << "--- valeurs DCT dans le premier bloc à décoder ---" << endl;
+	block b = g[0][0];
+	for (auto row : b)
+	{
+		for (auto val : row)
+		{
+			cout << val << " ";
+		}
+		cout << endl;
+	}
 
 	// Display block content in zigzag scan order
 	std::vector<pos> order = zigzagscan(8, 8);
@@ -211,7 +215,7 @@ string decode(Mat img, int n)
 	return message;
 }
 
-void dctcoeffreplacement(grid &g, string msg) {
+void dctcoeffreplacement(grid& g, string msg) {
 	//int sizeI = 512;
 
 	//Convert image to DCT grid
@@ -303,35 +307,13 @@ void dctcoeffreplacement(grid &g, string msg) {
 			break;
 		}
 	}
-
-	// TODO:
-	// (DONE, mais finalement inutile :sadness:) Create a function to transform DCT int in binary 
-	// Create a function to hide the message in Middle Frequencies :
-	//	Pour cacher le message, il faut le convertir en binaire
-	// 	Ensuite, on a un paramètre à définir : b (le nombre de bits modifiés par coefficient) //paramètre à 1 si ce qui est à cacher est un message écrit
-	//	- On va cacher le message en partant de la dernière fréquence moyenne et en remontant à l'envers
-	//	- Si on prend le scan zigzag, la dernière fréquence moyenne est à la position 48 (58 dans le sens de lecture normal)
-	//	Après on va check les LSB des coef, si b=1 on prend le dernier bit, si b=2 les deux derniers bits etc.
-	//	Si b=2 et que les deux bits sont pareils que les deux premiers de notre message, on laisse comme ça et on passe à la suite
-	//	Si b=2 et que les bits sont différents c'est un peu plus compliqué
-	//	Imaginons le DCT c'est 8 (donc 1000 en binaire) et que nous les deux bits qu'on veut mettre c'est 01. Si on changeait les deux derniers on aurait 1001 = 9
-	//	Et changer comme ça on aime pas, donc on va check si y'a un coefficient=9, si c'est le cas on va échanger les deux coef, sinon on échange avec le coeff dont la fin binaire ressemble le + à 01
 }
 
-void DCT2pixel(grid in, Mat &out)
+//calculation of inverted DCT coefficient
+void DCT2pixel(grid in, Mat& out)
 {
 	int width = in[0].size() * 8;
 	out = Mat::zeros(width, width, CV_8UC1);
-
-	block b = in[0][0];
-	for (auto row : b)
-	{
-		for (auto val : row)
-		{
-			cout << val << " ";
-		}
-		cout << endl;
-	}
 
 	grid g;
 
@@ -349,31 +331,71 @@ void DCT2pixel(grid in, Mat &out)
 					{
 						for (int v = 0; v < 8; v++)
 						{
-							if (u == 0) { cu = 1.0 / sqrt(2.0); } else { cu = 1; }
-							if (v == 0) { cv = 1.0 / sqrt(2.0); } else { cv = 1; }
-							sum += cu * cv * in[i/8][j/8][u][v]
+							if (u == 0) { cu = 1.0 / sqrt(2.0); }
+							else { cu = 1; }
+							if (v == 0) { cv = 1.0 / sqrt(2.0); }
+							else { cv = 1; }
+							sum += cu * cv * in[i / 8][j / 8][u][v]
 								* cos(((2.0 * x + 1) * u * M_PI) / 16.0)
 								* cos(((2.0 * y + 1) * v * M_PI) / 16.0);
 						}
 					}
 					//cout << "Somme : " << abs(sum) << endl;
-					out.at<uchar>(i + x, j + y) = (1 / sqrt(16.0)) * abs(sum);
+					out.at<uchar>(i + x, j + y) = ((1 / sqrt(16.0)) * abs(sum));
 				}
 			}
 		}
 	}
 }
 
-void encode(Mat in, Mat &out, string msg)
+void encode(Mat in, Mat& out, string msg)
 {
+	cout << "--- valeurs de l'image d'entree dans le premier bloc ---" << endl;
+	for (int i = 0; i < 8; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			cout << (int)in.at<uchar>(i, j) << " ";
+		}
+		cout << endl;
+	}
+
 	grid g;
-	cout << "1" << endl;
-	pixel2DCT(in, g);
-	cout << "2" << endl;
+	pixel2DCT(in, g); 
+	cout << "--- valeurs DCT dans le premier bloc avant remplacement ---" << endl;
+	block b = g[0][0];
+	for (auto row : b)
+	{
+		for (auto val : row)
+		{
+			cout << val << " ";
+		}
+		cout << endl;
+	}
+
 	dctcoeffreplacement(g, msg);
-	cout << "3" << endl;
+	cout << "--- valeurs DCT dans le premier bloc apres remplacement ---" << endl;
+	b = g[0][0];
+	for (auto row : b)
+	{
+		for (auto val : row)
+		{
+			cout << val << " ";
+		}
+		cout << endl;
+	}
+
 	DCT2pixel(g, out);
-	cout << "4" << endl;
+
+	cout << "--- valeurs de l'image de sortie dans le premier bloc ---" << endl;
+	for (int i = 0; i < 8; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			cout << (int)out.at<uchar>(i, j) << " ";
+		}
+		cout << endl;
+	}
 }
 
 int main()
@@ -390,7 +412,7 @@ int main()
 
 	string message = "";
 	message = decode(img_encoded, 72 * 8);
-	cout << message << endl;
+	cout << "Message code : " <<endl << message << endl;
 
 	//Mat stegano = dctcoeffreplacement(img, msg);
 	//imshow("stegano", stegano);
